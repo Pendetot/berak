@@ -7094,9 +7094,21 @@ elif [ -n "$1" ]; then
     error_and_exit "unknown option $1"
 fi
 
+# 需要 Alpine 包管理器环境
+if ! command -v apk >/dev/null 2>&1; then
+    error_and_exit "apk command not found. Please run '/trans.sh alpine' to bootstrap the Alpine environment."
+fi
+
+if ! [ -f /etc/apk/repositories ]; then
+    error_and_exit "Missing /etc/apk/repositories. Please run '/trans.sh alpine' so the Alpine environment is fully initialized before retrying."
+fi
+
 # 无参数运行部分
 # 允许 ramdisk 使用所有内存，默认是 50%
-if ! mount / -o remount,size=100%; then
+codex/fix-syntax-error-in-trans.sh-g1q5gv
+if ! mount / -o remount,size=100% >/dev/null 2>&1; then
+=======
+if ! mount / -o remount,size=100%; then main
     warn 'remount rootfs failed, continue with default tmpfs size'
 fi
 
