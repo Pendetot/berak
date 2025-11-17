@@ -68,6 +68,11 @@ is_run_from_locald() {
 }
 
 add_community_repo() {
+    if ! [ -f /etc/apk/repositories ]; then
+        warn 'skip add community repo: /etc/apk/repositories missing'
+        return
+    fi
+
     # 先检查原来的repo是不是egde
     if grep -q '^http.*/edge/main$' /etc/apk/repositories; then
         alpine_ver=edge
@@ -84,6 +89,10 @@ add_community_repo() {
 # 有时网络问题下载失败，导致脚本中断
 # 因此需要重试
 apk() {
+    if ! command -v apk >/dev/null 2>&1; then
+        error_and_exit "apk command not found. Please run '/trans.sh alpine' to bootstrap the Alpine environment."
+    fi
+
     retry 5 command apk "$@" >&2
 }
 
@@ -6013,23 +6022,31 @@ EOF
     hypervisor_vendor=$(lscpu | grep 'Hypervisor vendor:' | awk '{print $3}')
     apk del lscpu
 
-    aws_pv_ver=$(
-        case "$nt_ver" in
-            6.1)
-                if $support_sha256; then echo 8.3.5; else echo 8.3.2; fi
-                ;;
-            6.2|6.3)
-                case "$hypervisor_vendor" in
-                    Microsoft) echo 8.4.3 ;;
-                    Xen) echo 8.3.5 ;;
-                    *) echo 8.3.5 ;;
-                esac
-                ;;
-            *)
-                echo Latest
-                ;;
-        esac
-    )
+    case "$nt_ver" in
+        6.1)
+            if $support_sha256; then
+                aws_pv_ver=8.3.5
+            else
+                aws_pv_ver=8.3.2
+            fi
+            ;;
+        6.2|6.3)
+            case "$hypervisor_vendor" in
+                Microsoft)
+                    aws_pv_ver=8.4.3
+                    ;;
+                Xen)
+                    aws_pv_ver=8.3.5
+                    ;;
+                *)
+                    aws_pv_ver=8.3.5
+                    ;;
+            esac
+            ;;
+        *)
+            aws_pv_ver=Latest
+            ;;
+    esac
 
     url=$(
         case "$aws_pv_ver" in
@@ -6754,9 +6771,19 @@ sync_time() {
         ntpd -d -n -q -p "$ntp_server"
         ;;
     http)
-        url="$(grep -m1 ^http /etc/apk/repositories)/$(uname -m)/APKINDEX.tar.gz"
+        repo_url=$(grep -m1 ^http /etc/apk/repositories 2>/dev/null || true)
+        if [ -n "$repo_url" ]; then
+            url="$repo_url/$(uname -m)/APKINDEX.tar.gz"
+        else
+            warn 'cannot read /etc/apk/repositories, fall back to https://time.cloudflare.com'
+            url="https://time.cloudflare.com"
+        fi
         # 可能有多行，取第一行
-        date_header=$(wget -S --no-check-certificate --spider "$url" 2>&1 | grep -m1 '^  Date:')
+        date_header=$(wget -S --no-check-certificate --spider "$url" 2>&1 | grep -m1 '^  Date:' || true)
+        if [ -z "$date_header" ]; then
+            warn "failed to obtain Date header from $url"
+            return 1
+        fi
         # gnu date 不支持 -D
         busybox date -u -D "  Date: %a, %d %b %Y %H:%M:%S GMT" -s "$date_header"
         ;;
@@ -7058,13 +7085,29 @@ elif [ "$1" = "alpine" ]; then
     distro=alpine
     # 后面的步骤很多都会用到这个，例如分区布局
     cloud_image=0
+elif [ "$1" = "dd" ]; then
+    info 'switch to dd'
+    distro=dd
+    # 确保强制走 dd 流程，而不是沿用 cloud image 配置
+    cloud_image=0
 elif [ -n "$1" ]; then
     error_and_exit "unknown option $1"
 fi
 
+# 需要 Alpine 包管理器环境
+if ! command -v apk >/dev/null 2>&1; then
+    error_and_exit "apk command not found. Please run '/trans.sh alpine' to bootstrap the Alpine environment."
+fi
+
+if ! [ -f /etc/apk/repositories ]; then
+    error_and_exit "Missing /etc/apk/repositories. Please run '/trans.sh alpine' so the Alpine environment is fully initialized before retrying."
+fi
+
 # 无参数运行部分
 # 允许 ramdisk 使用所有内存，默认是 50%
-mount / -o remount,size=100%
+if ! mount / -o remount,size=100% >/dev/null 2>&1; then
+    warn 'remount rootfs failed, continue with default tmpfs size'
+fi
 
 # 同步时间
 # 1. 可以防止访问 https 出错
