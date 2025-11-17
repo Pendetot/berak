@@ -68,6 +68,11 @@ is_run_from_locald() {
 }
 
 add_community_repo() {
+    if ! [ -f /etc/apk/repositories ]; then
+        warn 'skip add community repo: /etc/apk/repositories missing'
+        return
+    fi
+
     # 先检查原来的repo是不是egde
     if grep -q '^http.*/edge/main$' /etc/apk/repositories; then
         alpine_ver=edge
@@ -84,6 +89,10 @@ add_community_repo() {
 # 有时网络问题下载失败，导致脚本中断
 # 因此需要重试
 apk() {
+    if ! command -v apk >/dev/null 2>&1; then
+        error_and_exit "apk command not found. Please run '/trans.sh alpine' to bootstrap the Alpine environment."
+    fi
+
     retry 5 command apk "$@" >&2
 }
 
@@ -6762,9 +6771,19 @@ sync_time() {
         ntpd -d -n -q -p "$ntp_server"
         ;;
     http)
-        url="$(grep -m1 ^http /etc/apk/repositories)/$(uname -m)/APKINDEX.tar.gz"
+        repo_url=$(grep -m1 ^http /etc/apk/repositories 2>/dev/null || true)
+        if [ -n "$repo_url" ]; then
+            url="$repo_url/$(uname -m)/APKINDEX.tar.gz"
+        else
+            warn 'cannot read /etc/apk/repositories, fall back to https://time.cloudflare.com'
+            url="https://time.cloudflare.com"
+        fi
         # 可能有多行，取第一行
-        date_header=$(wget -S --no-check-certificate --spider "$url" 2>&1 | grep -m1 '^  Date:')
+        date_header=$(wget -S --no-check-certificate --spider "$url" 2>&1 | grep -m1 '^  Date:' || true)
+        if [ -z "$date_header" ]; then
+            warn "failed to obtain Date header from $url"
+            return 1
+        fi
         # gnu date 不支持 -D
         busybox date -u -D "  Date: %a, %d %b %Y %H:%M:%S GMT" -s "$date_header"
         ;;
