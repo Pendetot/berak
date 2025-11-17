@@ -6013,23 +6013,31 @@ EOF
     hypervisor_vendor=$(lscpu | grep 'Hypervisor vendor:' | awk '{print $3}')
     apk del lscpu
 
-    aws_pv_ver=$(
-        case "$nt_ver" in
-            6.1)
-                if $support_sha256; then echo 8.3.5; else echo 8.3.2; fi
-                ;;
-            6.2|6.3)
-                case "$hypervisor_vendor" in
-                    Microsoft) echo 8.4.3 ;;
-                    Xen) echo 8.3.5 ;;
-                    *) echo 8.3.5 ;;
-                esac
-                ;;
-            *)
-                echo Latest
-                ;;
-        esac
-    )
+    case "$nt_ver" in
+        6.1)
+            if $support_sha256; then
+                aws_pv_ver=8.3.5
+            else
+                aws_pv_ver=8.3.2
+            fi
+            ;;
+        6.2|6.3)
+            case "$hypervisor_vendor" in
+                Microsoft)
+                    aws_pv_ver=8.4.3
+                    ;;
+                Xen)
+                    aws_pv_ver=8.3.5
+                    ;;
+                *)
+                    aws_pv_ver=8.3.5
+                    ;;
+            esac
+            ;;
+        *)
+            aws_pv_ver=Latest
+            ;;
+    esac
 
     url=$(
         case "$aws_pv_ver" in
