@@ -7066,6 +7066,9 @@ elif [ "$1" = "alpine" ]; then
     distro=alpine
     # 后面的步骤很多都会用到这个，例如分区布局
     cloud_image=0
+elif [ "$1" = "dd" ]; then
+    info 'switch to dd'
+    distro=dd
 elif [ -n "$1" ]; then
     error_and_exit "unknown option $1"
 fi
