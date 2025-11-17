@@ -6015,17 +6015,22 @@ EOF
         apk del lscpu
 
         aws_pv_ver=$(
-            case "$nt_ver" in
-            6.1) $support_sha256 && echo 8.3.5 || echo 8.3.2 ;;
-            6.2 | 6.3)
-                case "$hypervisor_vendor" in
-                Microsoft) echo 8.4.3 ;; # 实例初始系统为 Windows，能使用 8.4.3
-                Xen) echo 8.3.5 ;;       # 实例初始系统为 Linux，不能使用 8.4.3
-                esac
-                ;;
-            *) echo Latest ;;
+    case "$nt_ver" in
+        6.1) 
+            if $support_sha256; then echo 8.3.5; else echo 8.3.2; fi
+            ;;
+        6.2|6.3)
+            case "$hypervisor_vendor" in
+                Microsoft) echo 8.4.3 ;;
+                Xen) echo 8.3.5 ;;
+                *) echo 8.3.5 ;;
             esac
-        )
+            ;;
+        *) 
+            echo Latest 
+            ;;
+    esac
+)
 
         url=$(
             case "$aws_pv_ver" in
