@@ -7105,7 +7105,10 @@ fi
 
 # 无参数运行部分
 # 允许 ramdisk 使用所有内存，默认是 50%
+codex/fix-syntax-error-in-trans.sh-g1q5gv
 if ! mount / -o remount,size=100% >/dev/null 2>&1; then
+=======
+if ! mount / -o remount,size=100%; then main
     warn 'remount rootfs failed, continue with default tmpfs size'
 fi
 
